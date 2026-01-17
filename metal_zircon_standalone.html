@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Metal ve Zirkon Takip Sistemi</title>
+    <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+    <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        const MetalZirconTracker = () => {
+            const [data, setData] = useState([]);
+            const [contacts, setContacts] = useState([
+                { id: 1, name: 'Kişi 1', phone: '+905551234567' },
+                { id: 2, name: 'Kişi 2', phone: '+905559876543' },
+                { id: 3, name: 'Kişi 3', phone: '+905551112233' }
+            ]);
+            const [showSettings, setShowSettings] = useState(false);
+            const [newEntry, setNewEntry] = useState({
+                date: new Date().toISOString().split('T')[0],
+                metalMembers: '',
+                zirconMembers: '',
+                metalRpt: '',
+                zirconRpt: ''
+            });
+
+            useEffect(() => {
+                const savedData = localStorage.getItem('metalZirconData');
+                const savedContacts = localStorage.getItem('whatsappContacts');
+                if (savedData) {
+                    setData(JSON.parse(savedData));
+                }
+                if (savedContacts) {
+                    setContacts(JSON.parse(savedContacts));
+                }
+            }, []);
+
+            useEffect(() => {
+                localStorage.setItem('metalZirconData', JSON.stringify(data));
+            }, [data]);
+
+            useEffect(() => {
+                localStorage.setItem('whatsappContacts', JSON.stringify(contacts));
+            }, [contacts]);
+
+            const formatTurkishDate = (dateString) => {
+                const date = new Date(dateString);
+                const gunler = ['Pazar', 'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi'];
+                const aylar = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
+                
+                const gun = date.getDate();
+                const ay = aylar[date.getMonth()];
+                const yil = date.getFullYear();
+                const gunAdi = gunler[date.getDay()];
+                
+                return `${gun} ${ay} ${yil} - ${gunAdi}`;
+            };
+
+            const sendToWhatsApp = (entry, phoneNumber) => {
+                const message = `📊 Günlük Rapor - ${formatTurkishDate(entry.date)}
+
+Metal Üye: ${entry.metalMembers}
+Zirkon Üye: ${entry.zirconMembers}
+Metal RPT: ${entry.metalRpt}
+Zirkon RPT: ${entry.zirconRpt}`;
+
+                const encodedMessage = encodeURIComponent(message);
+                const whatsappUrl = `https://wa.me/${phoneNumber.replace(/[^0-9]/g, '')}?text=${encodedMessage}`;
+                window.open(whatsappUrl, '_blank');
+            };
+
+            const addContact = () => {
+                const newId = contacts.length > 0 ? Math.max(...contacts.map(c => c.id)) + 1 : 1;
+                setContacts([...contacts, { id: newId, name: `Kişi ${newId}`, phone: '+905551234567' }]);
+            };
+
+            const updateContact = (id, field, value) => {
+                setContacts(contacts.map(c => c.id === id ? { ...c, [field]: value } : c));
+            };
+
+            const deleteContact = (id) => {
+                setContacts(contacts.filter(c => c.id !== id));
+            };
+
+            const addEntry = () => {
+                if (newEntry.date && (newEntry.metalMembers || newEntry.zirconMembers || newEntry.metalRpt || newEntry.zirconRpt)) {
+                    const existingIndex = data.findIndex(entry => entry.date === newEntry.date);
+                    if (existingIndex >= 0) {
+                        const updated = [...data];
+                        updated[existingIndex] = {
+                            ...newEntry,
+                            metalMembers: Number(newEntry.metalMembers) || 0,
+                            zirconMembers: Number(newEntry.zirconMembers) || 0,
+                            metalRpt: Number(newEntry.metalRpt) || 0,
+                            zirconRpt: Number(newEntry.zirconRpt) || 0
+                        };
+                        setData(updated);
+                    } else {
+                        setData([...data, {
+                            ...newEntry,
+                            metalMembers: Number(newEntry.metalMembers) || 0,
+                            zirconMembers: Number(newEntry.zirconMembers) || 0,
+                            metalRpt: Number(newEntry.metalRpt) || 0,
+                            zirconRpt: Number(newEntry.zirconRpt) || 0
+                        }].sort((a, b) => new Date(a.date) - new Date(b.date)));
+                    }
+                    setNewEntry({
+                        date: new Date().toISOString().split('T')[0],
+                        metalMembers: '',
+                        zirconMembers: '',
+                        metalRpt: '',
+                        zirconRpt: ''
+                    });
+                }
+            };
+
+            const deleteEntry = (date) => {
+                setData(data.filter(entry => entry.date !== date));
+            };
+
+            const isSunday = (dateString) => {
+                return new Date(dateString).getDay() === 0;
+            };
+
+            const shouldHighlight = (dateString) => {
+                if (isSunday(dateString)) return false;
+                const entry = data.find(e => e.date === dateString);
+                const today = new Date().toISOString().split('T')[0];
+                return dateString < today && (!entry || (entry.metalMembers === 0 && entry.zirconMembers === 0 && entry.metalRpt === 0 && entry.zirconRpt === 0));
+            };
+
+            const getWeekNumber = (date) => {
+                const d = new Date(date);
+                d.setHours(0, 0, 0, 0);
+                d.setDate(d.getDate() + 4 - (d.getDay() || 7));
+                const yearStart = new Date(d.getFullYear(), 0, 1);
+                return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+            };
+
+            const calculateStats = () => {
+                const now = new Date();
+                const thisWeek = getWeekNumber(now);
+                const thisMonth = now.getMonth();
+                const thisYear = now.getFullYear();
+
+                const weekly = data.filter(e => {
+                    const d = new Date(e.date);
+                    return getWeekNumber(d) === thisWeek && d.getFullYear() === thisYear;
+                });
+
+                const monthly = data.filter(e => {
+                    const d = new Date(e.date);
+                    return d.getMonth() === thisMonth && d.getFullYear() === thisYear;
+                });
+
+                const yearly = data.filter(e => {
+                    const d = new Date(e.date);
+                    return d.getFullYear() === thisYear;
+                });
+
+                const sum = (arr, field) => arr.reduce((acc, e) => acc + (e[field] || 0), 0);
+
+                return {
+                    weekly: {
+                        metalMembers: sum(weekly, 'metalMembers'),
+                        zirconMembers: sum(weekly, 'zirconMembers'),
+                        metalRpt: sum(weekly, 'metalRpt'),
+                        zirconRpt: sum(weekly, 'zirconRpt')
+                    },
+                    monthly: {
+                        metalMembers: sum(monthly, 'metalMembers'),
+                        zirconMembers: sum(monthly, 'zirconMembers'),
+                        metalRpt: sum(monthly, 'metalRpt'),
+                        zirconRpt: sum(monthly, 'zirconRpt')
+                    },
+                    yearly: {
+                        metalMembers: sum(yearly, 'metalMembers'),
+                        zirconMembers: sum(yearly, 'zirconMembers'),
+                        metalRpt: sum(yearly, 'metalRpt'),
+                        zirconRpt: sum(yearly, 'zirconRpt')
+                    }
+                };
+            };
+
+            const stats = calculateStats();
+
+            const exportToCSV = () => {
+                const headers = ['Tarih', 'Metal Üye', 'Zirkon Üye', 'Metal RPT', 'Zirkon RPT'];
+                const rows = data.map(e => [e.date, e.metalMembers, e.zirconMembers, e.metalRpt, e.zirconRpt]);
+                const csv = [headers, ...rows].map(row => row.join(',')).join('\n');
+                const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = 'metal_zirkon_takip.csv';
+                link.click();
+            };
+
+            const saveToJSON = () => {
+                const allData = {
+                    data: data,
+                    contacts: contacts,
+                    savedDate: new Date().toISOString()
+                };
+                const json = JSON.stringify(allData, null, 2);
+                const blob = new Blob([json], { type: 'application/json' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = `metal_zirkon_yedek_${new Date().toISOString().split('T')[0]}.json`;
+                link.click();
+            };
+
+            const loadFromJSON = (event) => {
+                const file = event.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        try {
+                            const allData = JSON.parse(e.target.result);
+                            if (allData.data) setData(allData.data);
+                            if (allData.contacts) setContacts(allData.contacts);
+                            alert('✅ Veriler başarıyla yüklendi!');
+                        } catch (error) {
+                            alert('❌ Dosya okunamadı. Geçerli bir yedek dosyası seçin.');
+                        }
+                    };
+                    reader.readAsText(file);
+                }
+            };
+
+            return (
+                <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6">
+                    <div className="max-w-7xl mx-auto">
+                        <div className="bg-slate-800/50 backdrop-blur-sm rounded-xl shadow-2xl p-6 mb-6 border border-slate-700">
+                            <div className="flex justify-between items-center mb-6">
+                                <h1 className="text-3xl font-bold text-white flex items-center gap-3">
+                                    <span className="text-yellow-400">⚡</span>
+                                    Metal ve Zirkon Takip Sistemi
+                                </h1>
+                                <button
+                                    onClick={() => setShowSettings(!showSettings)}
+                                    className="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded flex items-center gap-2 transition-colors"
+                                >
+                                    ⚙️ WhatsApp Ayarları
+                                </button>
+                            </div>
+
+                            {showSettings && (
+                                <div className="bg-slate-700/50 rounded-lg p-4 mb-6 border border-slate-600">
+                                    <div className="flex justify-between items-center mb-3">
+                                        <h3 className="text-white font-semibold">WhatsApp Kişileri</h3>
+                                        <button onClick={() => setShowSettings(false)} className="text-gray-400 hover:text-white">
+                                            ✕
+                                        </button>
+                                    </div>
+                                    <div className="space-y-2 mb-3">
+                                        {contacts.map(contact => (
+                                            <div key={contact.id} className="flex gap-2">
+                                                <input
+                                                    type="text"
+                                                    value={contact.name}
+                                                    onChange={(e) => updateContact(contact.id, 'name', e.target.value)}
+                                                    placeholder="İsim"
+                                                    className="bg-slate-600 text-white rounded px-3 py-2 border border-slate-500 focus:border-blue-400 focus:outline-none flex-1"
+                                                />
+                                                <input
+                                                    type="text"
+                                                    value={contact.phone}
+                                                    onChange={(e) => updateContact(contact.id, 'phone', e.target.value)}
+                                                    placeholder="+90 555 123 4567"
+                                                    className="bg-slate-600 text-white rounded px-3 py-2 border border-slate-500 focus:border-blue-400 focus:outline-none flex-1"
+                                                />
+                                                <button
+                                                    onClick={() => deleteContact(contact.id)}
+                                                    className="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded transition-colors"
+                                                >
+                                                    🗑️
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <button
+                                        onClick={addContact}
+                                        className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded flex items-center gap-2 transition-colors"
+                                    >
+                                        ➕ Kişi Ekle
+                                    </button>
+                                </div>
+                            )}
+
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                                <div className="bg-blue-600/20 border border-blue-500/30 rounded-lg p-4">
+                                    <h3 className="text-blue-300 font-semibold mb-2">Haftalık Toplam</h3>
+                                    <div className="text-sm text-gray-300 space-y-1">
+                                        <div>Metal Üye: <span className="text-white font-bold">{stats.weekly.metalMembers}</span></div>
+                                        <div>Zirkon Üye: <span className="text-white font-bold">{stats.weekly.zirconMembers}</span></div>
+                                        <div>Metal RPT: <span className="text-white font-bold">{stats.weekly.metalRpt}</span></div>
+                                        <div>Zirkon RPT: <span className="text-white font-bold">{stats.weekly.zirconRpt}</span></div>
+                                    </div>
+                                </div>
+
+                                <div className="bg-green-600/20 border border-green-500/30 rounded-lg p-4">
+                                    <h3 className="text-green-300 font-semibold mb-2">Aylık Toplam</h3>
+                                    <div className="text-sm text-gray-300 space-y-1">
+                                        <div>Metal Üye: <span className="text-white font-bold">{stats.monthly.metalMembers}</span></div>
+                                        <div>Zirkon Üye: <span className="text-white font-bold">{stats.monthly.zirconMembers}</span></div>
+                                        <div>Metal RPT: <span className="text-white font-bold">{stats.monthly.metalRpt}</span></div>
+                                        <div>Zirkon RPT: <span className="text-white font-bold">{stats.monthly.zirconRpt}</span></div>
+                                    </div>
+                                </div>
+
+                                <div className="bg-purple-600/20 border border-purple-500/30 rounded-lg p-4">
+                                    <h3 className="text-purple-300 font-semibold mb-2">Yıllık Toplam</h3>
+                                    <div className="text-sm text-gray-300 space-y-1">
+                                        <div>Metal Üye: <span className="text-white font-bold">{stats.yearly.metalMembers}</span></div>
+                                        <div>Zirkon Üye: <span className="text-white font-bold">{stats.yearly.zirconMembers}</span></div>
+                                        <div>Metal RPT: <span className="text-white font-bold">{stats.yearly.metalRpt}</span></div>
+                                        <div>Zirkon RPT: <span className="text-white font-bold">{stats.yearly.zirconRpt}</span></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="bg-slate-700/50 rounded-lg p-4 mb-6">
+                                <h3 className="text-white font-semibold mb-3">Yeni Kayıt Ekle</h3>
+                                <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                                    <input
+                                        type="date"
+                                        value={newEntry.date}
+                                        onChange={(e) => setNewEntry({...newEntry, date: e.target.value})}
+                                        className="bg-slate-600 text-white rounded px-3 py-2 border border-slate-500 focus:border-blue-400 focus:outline-none"
+                                    />
+                                    <input
+                                        type="number"
+                                        placeholder="Metal Üye"
+                                        value={newEntry.metalMembers}
+                                        onChange={(e) => setNewEntry({...newEntry, metalMembers: e.target.value})}
+                                        className="bg-slate-600 text-white rounded px-3 py-2 border border-slate-500 focus:border-blue-400 focus:outline-none"
+                                    />
+                                    <input
+                                        type="number"
+                                        placeholder="Zirkon Üye"
+                                        value={newEntry.zirconMembers}
+                                        onChange={(e) => setNewEntry({...newEntry, zirconMembers: e.target.value})}
+                                        className="bg-slate-600 text-white rounded px-3 py-2 border border-slate-500 focus:border-blue-400 focus:outline-none"
+                                    />
+                                    <input
+                                        type="number"
+                                        placeholder="Metal RPT"
+                                        value={newEntry.metalRpt}
+                                        onChange={(e) => setNewEntry({...newEntry, metalRpt: e.target.value})}
+                                        className="bg-slate-600 text-white rounded px-3 py-2 border border-slate-500 focus:border-blue-400 focus:outline-none"
+                                    />
+                                    <input
+                                        type="number"
+                                        placeholder="Zirkon RPT"
+                                        value={newEntry.zirconRpt}
+                                        onChange={(e) => setNewEntry({...newEntry, zirconRpt: e.target.value})}
+                                        className="bg-slate-600 text-white rounded px-3 py-2 border border-slate-500 focus:border-blue-400 focus:outline-none"
+                                    />
+                                </div>
+                                <div className="flex gap-2 mt-3 flex-wrap">
+                                    <button
+                                        onClick={addEntry}
+                                        className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded flex items-center gap-2 transition-colors"
+                                    >
+                                        ➕ Ekle
+                                    </button>
+                                    <button
+                                        onClick={exportToCSV}
+                                        className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded flex items-center gap-2 transition-colors"
+                                    >
+                                        📥 CSV İndir
+                                    </button>
+                                    <button
+                                        onClick={saveToJSON}
+                                        className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded flex items-center gap-2 transition-colors"
+                                    >
+                                        💾 Yedeği Kaydet
+                                    </button>
+                                    <label className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded flex items-center gap-2 transition-colors cursor-pointer">
+                                        📂 Yedeği Yükle
+                                        <input type="file" accept=".json" onChange={loadFromJSON} className="hidden" />
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div className="overflow-x-auto">
+                                <table className="w-full">
+                                    <thead>
+                                        <tr className="bg-slate-700 text-gray-200">
+                                            <th className="px-4 py-3 text-left rounded-tl-lg">Tarih</th>
+                                            <th className="px-4 py-3 text-left">Metal Üye</th>
+                                            <th className="px-4 py-3 text-left">Zirkon Üye</th>
+                                            <th className="px-4 py-3 text-left">Metal RPT</th>
+                                            <th className="px-4 py-3 text-left">Zirkon RPT</th>
+                                            <th className="px-4 py-3 text-left">WhatsApp</th>
+                                            <th className="px-4 py-3 text-left rounded-tr-lg">İşlem</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {data.slice().reverse().map((entry, idx) => {
+                                            const isHighlighted = shouldHighlight(entry.date);
+                                            const rowClass = isHighlighted 
+                                                ? 'bg-red-900/40 border-l-4 border-red-500' 
+                                                : idx % 2 === 0 ? 'bg-slate-700/30' : 'bg-slate-600/20';
+                                            
+                                            return (
+                                                <tr key={entry.date} className={`${rowClass} hover:bg-slate-600/40 transition-colors`}>
+                                                    <td className="px-4 py-3 text-gray-200 font-medium">
+                                                        {formatTurkishDate(entry.date)}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-gray-200">{entry.metalMembers}</td>
+                                                    <td className="px-4 py-3 text-gray-200">{entry.zirconMembers}</td>
+                                                    <td className="px-4 py-3 text-gray-200">{entry.metalRpt}</td>
+                                                    <td className="px-4 py-3 text-gray-200">{entry.zirconRpt}</td>
+                                                    <td className="px-4 py-3">
+                                                        <div className="flex gap-1">
+                                                            {contacts.map(contact => (
+                                                                <button
+                                                                    key={contact.id}
+                                                                    onClick={() => sendToWhatsApp(entry, contact.phone)}
+                                                                    className="bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded text-xs transition-colors"
+                                                                    title={contact.name}
+                                                                >
+                                                                    {contact.name.charAt(0)}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-4 py-3">
+                                                        <button
+                                                            onClick={() => deleteEntry(entry.date)}
+                                                            className="text-red-400 hover:text-red-300 transition-colors"
+                                                        >
+                                                            🗑️
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                        {data.length === 0 && (
+                                            <tr>
+                                                <td colSpan="7" className="px-4 py-8 text-center text-gray-400">
+                                                    Henüz kayıt yok. Yukarıdaki formu kullanarak kayıt ekleyin.
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div className="mt-4 text-xs text-gray-400 space-y-1">
+                                <p>💡 Pazar günleri hariç, veri girilmemiş günler kırmızı ile işaretlenir.</p>
+                                <p>📱 WhatsApp butonlarına tıklayarak o günün raporunu ilgili kişiye gönderebilirsiniz.</p>
+                                <p>💾 "Yedeği Kaydet" ile tüm verilerinizi JSON dosyası olarak bilgisayarınıza kaydedebilirsiniz.</p>
+                                <p>📂 "Yedeği Yükle" ile kaydettiğiniz dosyayı geri yükleyebilirsiniz.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        ReactDOM.render(<MetalZirconTracker />, document.getElementById('root'));
+    </script>
+</body>
+</html>
